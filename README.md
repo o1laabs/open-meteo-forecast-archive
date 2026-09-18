@@ -1,0 +1,81 @@
+# Open-Meteo 逐日预报归档 · 山东省 17 点位
+
+两个整年（2025-01-01 ~ 2026-09-15）的**逐日预报**数据，按 **day1~day7 提前期**切片。
+
+不是实况，是**预报**——每一天的值来自"比它早 N 天"那次模型运行。
+
+## 数据来源
+
+- 接口：`previous-runs-api.open-meteo.com`（Open-Meteo Historical Forecast / Previous Runs API）
+- 模型：`gfs_seamless`(NOAA GFS) / `ecmwf_ifs025`(ECMWF IFS) / `jma_seamless`(JMA GSM)
+- 时区：`Asia/Shanghai`
+- 时间粒度：原始为小时值，本仓库已聚合为**日值**
+
+## 字段说明
+
+| 字段 | 单位 | 说明 |
+|---|---|---|
+| `region_name` | — | 城市名（17 个点位，含"山东省"几何中心汇总点）|
+| `model` | — | 预报模型 |
+| `issue_date` | 日期 | **预报发布日** = `forecast_date - lead_day` |
+| `lead_day` | 天 | **提前期** 1~7 |
+| `forecast_date` | 日期 | 被预报的目标日期 |
+| `temp_max` / `temp_min` | °C | 当日最高/最低气温 |
+| `apparent_temp` | °C | 体感温度（模型原始输出，日平均）|
+| `wind_chill` | °C | 风寒指数，NWS 公式，**仅 T≤10°C 且风速>4.8km/h 时有值**，否则留空 |
+| `heat_index` | °C | 热指数，NWS Rothfusz 公式，**仅 T≥27°C 时有值**，否则留空 |
+| `relative_humidity` | % | 相对湿度（日均）|
+| `wind_speed` | km/h | 风速（日均）|
+| `wind_gust` | km/h | 阵风（日最大值）|
+| `cloud_cover` | % | 总云量（日均）|
+| `shortwave_radiation` | MJ/m² | 地表短波辐射**日累计**（接口原为 W/m² 小时均值，已 ×3600/1e6 后累加）|
+| `precipitation` | mm | 日总降水量 |
+| `snowfall` | cm | 日总降雪量 |
+
+### 关于 wind_chill / heat_index 留空
+
+这是**按 NWS 定义的正确行为**，不是缺数据：
+
+- 风寒指数只在 `T≤10°C 且 V>4.8km/h` 时有物理意义
+- 热指数只在 `T≥27°C` 时有意义
+
+因此在济南，**冬季只有风寒、夏季只有热指数**，春秋两季两个都空。
+
+## 数据结构理解
+
+本仓库是**「发布日视图」**：`issue_date` + `forecast_date` 两列同时存在，
+每行表示"某天发布的、指向某日的预报"。
+
+例如 `issue_date=2025-07-11, lead_day=4, forecast_date=2025-07-15`，
+即为 7 月 11 日那次运行对 7 月 15 日的预报。
+
+如果要做**预报误差衰减分析**（skill degradation），按 `forecast_date` 分组、
+比较同一天不同 `lead_day` 的预测值即可。
+
+## 已知缺口
+
+受 Open-Meteo 免费层日配额（约 10,000 次/天）限制，本次抓取完成 **78.8%**：
+
+- **完整城市**（3 模型 × 全时段）：济南、青岛、淄博、枣庄、东营
+- **部分城市**：潍坊、济宁、烟台、聊城、菏泽、滨州、山东省、威海、泰安、日照、德州
+- **缺失**：临沂
+
+剩余部分待配额重置后补齐。
+
+## 目录
+
+```
+data/
+  ├── all_regions.csv      # 全部城市合并（162,564 行）
+  ├── 济南.csv
+  ├── 青岛.csv
+  └── ...                  # 共 17 个文件
+```
+
+## 许可
+
+数据归 Open-Meteo（CC BY 4.0），本仓库仅做格式转换与聚合。
+
+- Open-Meteo: https://open-meteo.com/
+- 数据来源文档: https://open-meteo.com/en/docs/previous-runs-api
+- 免费层额度: https://open-meteo.com/en/pricing
